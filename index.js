@@ -7,6 +7,7 @@ require('dotenv').config();
 
 const app = express();
 const CORE_SERVICE_URL = process.env.CORE_SERVICE_URL || 'http://localhost:3000';
+const CORE_API_TOKEN = process.env.CORE_API_TOKEN;
 const EDGE_HOSTNAME = process.env.EDGE_HOSTNAME || 'localhost';
 
 const redisClient = redis.createClient({
@@ -46,7 +47,9 @@ app.get('/:short_path', async (req, res) => {
 
 async function syncPaths() {
     try {
-        const response = await axios.get(`${CORE_SERVICE_URL}/internal/sync/paths`);
+        const response = await axios.get(`${CORE_SERVICE_URL}/internal/sync/paths`, {
+            headers: { 'x-api-token': CORE_API_TOKEN }
+        });
         const paths = response.data;
         const relevantPaths = paths.filter(p => p.hostname === EDGE_HOSTNAME);
         
@@ -68,7 +71,9 @@ async function syncLogs() {
         if (logs.length === 0) return;
 
         const parsedLogs = logs.map(l => JSON.parse(l));
-        const response = await axios.post(`${CORE_SERVICE_URL}/internal/sync/logs`, parsedLogs);
+        const response = await axios.post(`${CORE_SERVICE_URL}/internal/sync/logs`, parsedLogs, {
+            headers: { 'x-api-token': CORE_API_TOKEN }
+        });
         
         if (response.data.success) {
             await redisClient.lTrim('access_logs_buffer', logs.length, -1);
@@ -99,10 +104,12 @@ async function start() {
 
     // Check Core Service
     try {
-        await axios.get(`${CORE_SERVICE_URL}/internal/sync/paths`);
+        await axios.get(`${CORE_SERVICE_URL}/internal/sync/paths`, {
+            headers: { 'x-api-token': CORE_API_TOKEN }
+        });
         console.log('✅ Core Service connection: SUCCESS');
     } catch (err) {
-        console.warn('⚠️ Core Service connection: FAILED (Will retry during sync)');
+        console.warn('⚠️ Core Service connection: FAILED or Unauthorized (Will retry during sync)');
     }
 
     const PORT = process.env.EDGE_PORT || 4000;
